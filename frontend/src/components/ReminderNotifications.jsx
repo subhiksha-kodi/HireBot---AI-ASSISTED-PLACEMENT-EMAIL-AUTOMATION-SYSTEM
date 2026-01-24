@@ -53,9 +53,12 @@ function ReminderNotifications({ onClose, onCountChange }) {
   const handleMarkFulfilled = async (reminderId) => {
     try {
       await markReminderFulfilled(reminderId);
+      // Remove from both regular reminders and visit reminders
       const updatedReminders = pendingReminders.filter(r => r.id !== reminderId);
+      const updatedVisits = visitReminders.filter(r => r.id !== reminderId);
       setPendingReminders(updatedReminders);
-      updateTotalCount(updatedReminders.length, visitReminders.length);
+      setVisitReminders(updatedVisits);
+      updateTotalCount(updatedReminders.length, updatedVisits.length);
     } catch (error) {
       console.error('Failed to mark reminder as fulfilled:', error);
     }
@@ -63,12 +66,22 @@ function ReminderNotifications({ onClose, onCountChange }) {
 
   const handleSendReminder = async (reminder) => {
     try {
+      console.log('Generating reminder draft for:', reminder);
       const draft = await generateReminderDraft(reminder.id);
+      console.log('Draft generated:', draft);
+      
+      // Check if it's a date restriction error
+      if (draft.error === 'date_restriction') {
+        alert(`⚠️ Reminder Draft Unavailable\n\n${draft.message}`);
+        return;
+      }
+      
       setSelectedReminder(reminder);
       setDraftEmail(draft);
       setShowDraftModal(true);
     } catch (error) {
       console.error('Failed to generate reminder draft:', error);
+      alert('Failed to generate reminder draft. Please try again.');
     }
   };
 
@@ -141,8 +154,29 @@ function ReminderNotifications({ onClose, onCountChange }) {
                     <strong>{notification.company_name}</strong> - {notification.contact_name}
                   </div>
 
-                  <div className="text-sm text-gray-600">
+                  <div className="text-sm text-gray-600 mb-3">
                     {notification.description}
+                  </div>
+                  
+                  <div className="flex gap-3 mt-4">
+                    <button
+                      onClick={() => handleMarkFulfilled(notification.id)}
+                      className="flex items-center gap-2 px-4 py-2 bg-green-100 text-green-700 text-sm font-medium rounded-lg hover:bg-green-200 transition-colors duration-200 shadow-sm border border-green-200"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      Mark Fulfilled
+                    </button>
+                    <button
+                      onClick={() => handleSendReminder(notification)}
+                      className="flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 text-sm font-medium rounded-lg hover:bg-blue-200 transition-colors duration-200 shadow-sm border border-blue-200"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                      </svg>
+                      Draft Reminder
+                    </button>
                   </div>
                 </div>
               ))}
@@ -159,17 +193,23 @@ function ReminderNotifications({ onClose, onCountChange }) {
                   <div className="text-sm text-violet-600 mb-3">
                     Due: {reminder.deadline_text}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-3 mt-4">
                     <button
                       onClick={() => handleMarkFulfilled(reminder.id)}
-                      className="text-sm bg-green-100 text-green-700 px-3 py-1.5 rounded hover:bg-green-200 font-medium"
+                      className="flex items-center gap-2 px-4 py-2 bg-green-100 text-green-700 text-sm font-medium rounded-lg hover:bg-green-200 transition-colors duration-200 shadow-sm border border-green-200"
                     >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
                       Mark Fulfilled
                     </button>
                     <button
                       onClick={() => handleSendReminder(reminder)}
-                      className="text-sm bg-blue-100 text-blue-700 px-3 py-1.5 rounded hover:bg-blue-200 font-medium"
+                      className="flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 text-sm font-medium rounded-lg hover:bg-blue-200 transition-colors duration-200 shadow-sm border border-blue-200"
                     >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                      </svg>
                       Draft Reminder
                     </button>
                   </div>

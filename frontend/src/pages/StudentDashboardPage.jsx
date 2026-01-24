@@ -10,6 +10,8 @@ function StudentDashboardPage() {
   const [countFilter, setCountFilter] = useState(10);
   const [allStudentsDeptFilter, setAllStudentsDeptFilter] = useState('all');
 
+  const [searchQuery, setSearchQuery] = useState('');
+
   // Data State
   const [students, setStudents] = useState([]);
 
@@ -175,14 +177,26 @@ function StudentDashboardPage() {
 
   // Pagination Logic
   const getFilteredAllStudents = () => {
-    if (allStudentsDeptFilter === 'all') {
-      return students;
-    } else if (allStudentsDeptFilter === 'software') {
-      return students.filter(s => s.department && ['CSE', 'IT', 'AIML', 'AIDS', 'CSBS'].includes(s.department.toUpperCase()));
+    let filtered = students;
+    
+    // Apply department filter
+    if (allStudentsDeptFilter === 'software') {
+      filtered = filtered.filter(s => s.department && ['CSE', 'IT', 'AIML', 'AIDS', 'CSBS'].includes(s.department.toUpperCase()));
     } else if (allStudentsDeptFilter === 'core') {
-      return students.filter(s => s.department && !['CSE', 'IT', 'AIML', 'AIDS', 'CSBS'].includes(s.department.toUpperCase()));
+      filtered = filtered.filter(s => s.department && !['CSE', 'IT', 'AIML', 'AIDS', 'CSBS'].includes(s.department.toUpperCase()));
     }
-    return students;
+    
+    // Apply search filter
+    if (searchQuery) {
+      filtered = filtered.filter(s => 
+        s.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        s.roll_no?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        s.department?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        s.domain?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+    
+    return filtered;
   };
 
   const filteredStudents = getFilteredAllStudents();
@@ -495,46 +509,65 @@ function StudentDashboardPage() {
                   Showing {filteredStudents.length} record(s) ordered by import
                 </p>
               </div>
-              <div className="flex bg-slate-100 rounded-lg p-1">
-                <button 
-                  onClick={() => {
-                    setAllStudentsDeptFilter('all');
-                    setCurrentPage(1);
-                  }}
-                  className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
-                    allStudentsDeptFilter === 'all' 
-                      ? 'bg-blue-500 text-white shadow-sm' 
-                      : 'text-slate-600 hover:text-slate-800 hover:bg-slate-200'
-                  }`}
-                >
-                  All
-                </button>
-                <button 
-                  onClick={() => {
-                    setAllStudentsDeptFilter('software');
-                    setCurrentPage(1);
-                  }}
-                  className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
-                    allStudentsDeptFilter === 'software' 
-                      ? 'bg-blue-500 text-white shadow-sm' 
-                      : 'text-slate-600 hover:text-slate-800 hover:bg-slate-200'
-                  }`}
-                >
-                  Software
-                </button>
-                <button 
-                  onClick={() => {
-                    setAllStudentsDeptFilter('core');
-                    setCurrentPage(1);
-                  }}
-                  className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
-                    allStudentsDeptFilter === 'core' 
-                      ? 'bg-blue-500 text-white shadow-sm' 
-                      : 'text-slate-600 hover:text-slate-800 hover:bg-slate-200'
-                  }`}
-                >
-                  Core
-                </button>
+              <div className="flex items-center gap-3">
+                {/* Search Bar */}
+                <div className="relative">
+                  <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <input
+                    type="text"
+                    placeholder="Search students..."
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="pl-10 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-64"
+                  />
+                </div>
+                {/* Department Filter */}
+                <div className="flex bg-slate-100 rounded-lg p-1">
+                  <button 
+                    onClick={() => {
+                      setAllStudentsDeptFilter('all');
+                      setCurrentPage(1);
+                    }}
+                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                      allStudentsDeptFilter === 'all' 
+                        ? 'bg-blue-500 text-white shadow-sm' 
+                        : 'text-slate-600 hover:text-slate-800 hover:bg-slate-200'
+                    }`}
+                  >
+                    All
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setAllStudentsDeptFilter('software');
+                      setCurrentPage(1);
+                    }}
+                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                      allStudentsDeptFilter === 'software' 
+                        ? 'bg-blue-500 text-white shadow-sm' 
+                        : 'text-slate-600 hover:text-slate-800 hover:bg-slate-200'
+                    }`}
+                  >
+                    Software
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setAllStudentsDeptFilter('core');
+                      setCurrentPage(1);
+                    }}
+                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                      allStudentsDeptFilter === 'core' 
+                        ? 'bg-blue-500 text-white shadow-sm' 
+                        : 'text-slate-600 hover:text-slate-800 hover:bg-slate-200'
+                    }`}
+                  >
+                    Core
+                  </button>
+                </div>
               </div>
             </div>
 

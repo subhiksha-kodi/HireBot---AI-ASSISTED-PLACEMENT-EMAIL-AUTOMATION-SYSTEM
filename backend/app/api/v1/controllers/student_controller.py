@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
+import pandas as pd
 
 from app.db.session import get_db
 from app.models.student_model import Student
@@ -29,33 +30,107 @@ async def upload_students_csv(
     append_mode: bool = Form(False),
     db: Session = Depends(get_db)
 ):
+    # File format validation
     if not file.filename.endswith((".csv", ".xlsx", ".xls")):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only CSV and Excel files (.csv, .xlsx, .xls) are supported."
+            detail="❌ File Format Error: Only CSV and Excel files (.csv, .xlsx, .xls) are supported."
         )
 
     try:
         file_bytes = await file.read()
+        
+        # Check if file is empty
+        if len(file_bytes) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="❌ Empty File Error: The uploaded file is empty. Please upload a file with student data."
+            )
+        
         students = CSVService.import_students_from_file(
             db, file_bytes, file.filename, replace_mode=replace_mode, append_mode=append_mode
         )
+        
         if not students:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No valid students found in file. Please check the file format and ensure it contains roll_no, name, department, and domain columns."
+                detail="❌ No Data Error: No valid students found in file. Please check the file format and ensure it contains roll_no, name, department columns."
             )
+            
         return [StudentResponse.model_validate(s) for s in students]
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
     except ValueError as e:
+        error_msg = str(e)
+        if "Could not find" in error_msg and "column" in error_msg:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"❌ Column Missing Error: {error_msg}"
+            )
+        elif "Failed to read file" in error_msg:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"❌ File Reading Error: {error_msg}. Please check if the file is corrupted or in the correct format."
+            )
+        elif "Failed to save students" in error_msg:
+            if "Unknown column" in error_msg:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"❌ Database Schema Error: {error_msg}. Please contact support - database schema needs updating."
+                )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"❌ Database Save Error: {error_msg}"
+                )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"❌ Data Processing Error: {error_msg}"
+            )
+    except UnicodeDecodeError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail="❌ File Encoding Error: Unable to read the file. Please save your CSV file with UTF-8 encoding or try uploading an Excel file instead."
+        )
+    except pd.errors.EmptyDataError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="❌ Empty Data Error: The file appears to be empty or contains no readable data."
+        )
+    except pd.errors.ParserError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"❌ File Parse Error: Unable to parse the file. Please check the file format. Details: {str(e)}"
         )
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to process file: {str(e)}"
-        )
+        # Log the full error for debugging
+        import traceback
+        print(f"Unexpected error in student upload: {traceback.format_exc()}")
+        
+        error_str = str(e)
+        if "conversation_history" in error_str:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="❌ Database Schema Error: Missing 'conversation_history' column. Please contact support to update the database schema."
+            )
+        elif "skills_text" in error_str:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="❌ Database Schema Error: Missing 'skills_text' column. Please contact support to update the database schema."
+            )
+        elif "date" in error_str:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="❌ Database Schema Error: Missing 'date' column. Please contact support to update the database schema."
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"❌ Unexpected Error: {error_str}. Please try again or contact support if the issue persists."
+            )
 
 
 @router.put("/{student_id}", response_model=StudentResponse)

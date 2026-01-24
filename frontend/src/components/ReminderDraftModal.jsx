@@ -10,7 +10,7 @@ function ReminderDraftModal({ reminder, draft, onClose, onApprove }) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl w-full max-w-2xl shadow-xl">
+      <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col shadow-xl">
         <div className="p-6 border-b border-slate-200">
           <div className="flex items-center justify-between">
             <div>
@@ -28,7 +28,7 @@ function ReminderDraftModal({ reminder, draft, onClose, onApprove }) {
           </div>
         </div>
 
-        <div className="p-6 space-y-4">
+        <div className="p-6 space-y-4 overflow-y-auto flex-1">
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
             <div className="text-sm text-amber-800">
               <strong>Reminder Context:</strong> {reminder.description}

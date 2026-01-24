@@ -32,8 +32,17 @@ function EmailConversationModal({ contact, onClose, onRefresh }) {
         };
       });
 
-      mappedConversations.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-      setConversations(mappedConversations);
+      // Remove duplicates based on message content, subject, and direction
+      const uniqueConversations = mappedConversations.filter((conv, index, self) => {
+        return index === self.findIndex(c => 
+          c.message.trim() === conv.message.trim() && 
+          c.subject === conv.subject &&
+          c.direction === conv.direction
+        );
+      });
+
+      uniqueConversations.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+      setConversations(uniqueConversations);
     } else {
       console.log('No conversation data or not an array');
       setConversations([]);

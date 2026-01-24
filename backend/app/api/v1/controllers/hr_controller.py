@@ -347,10 +347,51 @@ def delete_template(template_id: int):
     TEMPLATES_STORAGE = [t for t in TEMPLATES_STORAGE if t["id"] != template_id]
     return {"message": "Template deleted successfully"}
 
-@router.post("/check-followups")
-def check_followups(db: Session = Depends(get_db)):
-    # TODO: Implement FollowUpService
-    return {"message": "Follow-up service not implemented yet"}
+@router.post("/create-manual-reminder")
+def create_manual_reminder(request: dict, db: Session = Depends(get_db)):
+    """Create a manual reminder from message content"""
+    from app.services.ai_service import AIService
+    from app.services.reminder_service import ReminderService
+    from app.schemas.reminder_schema import ReminderCreate
+    
+    contact_id = request.get("contact_id")
+    message = request.get("message")
+    
+    if not contact_id or not message:
+        raise HTTPException(status_code=400, detail="contact_id and message are required")
+    
+    contact = db.query(HRContact).filter(HRContact.id == contact_id).first()
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    
+    # Extract intent from message
+    intent = AIService.extract_intent(message, contact.company)
+    visit_date = intent.get("visit_date")
+    
+    if visit_date:
+        # Cancel old visit reminders for this contact
+        cancelled_count = ReminderService.handle_cancellation(db, contact_id, {'is_cancelled': True})
+        
+        # Create new reminder
+        new_reminder = ReminderService.create_reminder(db, ReminderCreate(
+            contact_id=contact_id,
+            description=f"Campus Visit: {contact.company}",
+            due_date=visit_date,
+            priority="high"
+        ))
+        
+        return {
+            "message": f"Manual reminder created successfully",
+            "visit_date": visit_date,
+            "cancelled_old_reminders": cancelled_count,
+            "new_reminder_id": new_reminder.id,
+            "company": contact.company
+        }
+    else:
+        return {
+            "message": "No visit date detected in message",
+            "intent": intent
+        }
 
 @router.get("/debug-contact/{contact_id}")
 def debug_contact(contact_id: int, db: Session = Depends(get_db)):

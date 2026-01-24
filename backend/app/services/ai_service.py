@@ -454,11 +454,11 @@ Return ONLY this JSON:
                         shortfall_context = f"""
 IMPORTANT: The HR requested {req_count} students, but we only have {actual_count} suitable candidates.
 You MUST explicitly state this in the intro.
-REQUIRED PHRASING: "Thank you for your interest in our students. As of now, we have shortlisted {actual_count} suitable students who meet your requirements in the {domain} domain. The details are shared below:"
+REQUIRED PHRASING: "Thank you for your interest in our students. Currently, we have {actual_count} students matching your requirements for the {domain} domain. The details are shared below:"
 """
                     else:
                         shortfall_context = f"""
-Standard Intro: "Thank you for your interest in our students. We have shortlisted the following candidates who match your requirements in the {domain} domain:"
+Standard Intro: "Thank you for your interest in our students. Based on your requirements, here are {actual_count} suitable candidates:"
 """
 
                     prompt = f"""{AIService.SYSTEM_PROMPT}
@@ -509,15 +509,19 @@ Do NOT include a signature.
                     student_section = "\n\n".join(student_list)
                     
                     # 2. Select Closing Text based on count match
+                    visit_acknowledgment = ""
+                    if 'visit' in clean_message.lower() or 'campus' in clean_message.lower():
+                        visit_acknowledgment = "We look forward to your campus visit and will ensure all necessary arrangements are made for a productive interaction with our students. "
+                    
                     if req_count and actual_count < req_count:
-                        closing_text = f"""Currently, we are able to provide details for {actual_count} students, and we will share additional profiles if more suitable candidates are identified. We will be happy to forward their detailed resumes and arrange interviews at your convenience.
+                        closing_text = f"""{visit_acknowledgment}Currently, we have {actual_count} students matching your requirements for the {domain} domain. We will continue to identify additional suitable candidates and share their profiles as they become available.
 
-Kindly let us know your preferred next steps.
+Please let us know your preferred next steps.
 
-Warm regards,
+Best regards,
 Placement Team"""
                     else:
-                        closing_text = """These students have demonstrated strong academic performance and relevant skills. We can arrange interviews at your convenience and provide detailed resumes upon request.
+                        closing_text = f"""{visit_acknowledgment}These students have demonstrated strong academic performance and relevant skills in your required domain.
 
 Please let us know your preferred next steps.
 
@@ -628,13 +632,18 @@ Placement Team"""
             
             student_section = "\n\n".join(student_list)
             
+            # Check for campus visit mention
+            visit_acknowledgment = ""
+            if 'visit' in hr_message.lower() or 'campus' in hr_message.lower():
+                visit_acknowledgment = "We look forward to your campus visit and will ensure all necessary arrangements are made for a productive interaction with our students. "
+            
             return f"""{greeting}
  
- Thank you for your interest in our students. Based on your requirements, here are suitable candidates:
+ Thank you for your interest in our students. Currently, we have {len(students_data)} students matching your requirements. The details are shared below:
  
  {student_section}
  
- These students have demonstrated strong academic performance and relevant skills. We can arrange interviews at your convenience and provide detailed resumes upon request.
+ {visit_acknowledgment}These students have demonstrated strong academic performance and relevant skills in your required domain.
  
  Please let us know your preferred next steps.
  
@@ -681,6 +690,116 @@ Placement Team"""
         result = AIService.generate_draft_reply(hr_reply, company, None, students_data)
         return result['content']
     
+    @staticmethod
+    def detect_cancellation(hr_message: str) -> Dict:
+        """
+        Detect if HR message indicates cancellation or rescheduling
+        Returns: is_cancelled, reason, reschedule_mentioned
+        """
+        hr_lower = hr_message.lower()
+        
+        # Cancellation keywords
+        cancellation_keywords = [
+            'cancelled', 'canceled', 'cancel', 'postpone', 'postponed', 
+            'reschedule', 'rescheduled', 'delay', 'delayed', 'unable to',
+            'not able to', 'cannot', 'can\'t', 'won\'t be able', 'will not be able'
+        ]
+        
+        # Visit/event keywords
+        event_keywords = ['visit', 'meeting', 'interview', 'session', 'appointment']
+        
+        # Check for cancellation patterns
+        is_cancelled = False
+        reason = None
+        reschedule_mentioned = False
+        
+        # Direct cancellation detection
+        for cancel_word in cancellation_keywords:
+            if cancel_word in hr_lower:
+                is_cancelled = True
+                break
+        
+        # Check if it's related to a visit/event
+        if is_cancelled:
+            has_event_context = any(event_word in hr_lower for event_word in event_keywords)
+            if not has_event_context:
+                # If no event context, it might not be a cancellation we care about
+                is_cancelled = False
+        
+        # Extract reason if mentioned
+        reason_patterns = [
+            r'due to ([^.]+)',
+            r'because of ([^.]+)',
+            r'owing to ([^.]+)',
+            r'on account of ([^.]+)'
+        ]
+        
+        for pattern in reason_patterns:
+            match = re.search(pattern, hr_lower)
+            if match:
+                reason = match.group(1).strip()
+                break
+        
+        # Check for rescheduling mention
+        reschedule_phrases = [
+            'reschedule', 'rescheduled', 'later date', 'another time', 
+            'new date', 'different date', 'postpone'
+        ]
+        reschedule_mentioned = any(phrase in hr_lower for phrase in reschedule_phrases)
+        
+        return {
+            'is_cancelled': is_cancelled,
+            'reason': reason or 'No specific reason provided',
+            'reschedule_mentioned': reschedule_mentioned
+        }
+        
+    @staticmethod
+    def detect_rescheduling(hr_message: str) -> Dict:
+        """
+        Detect if HR message indicates rescheduling with new date
+        Returns: is_rescheduled, new_date, reason
+        """
+        if not hr_message:
+            return {'is_rescheduled': False, 'new_date': None, 'reason': None}
+            
+        hr_lower = hr_message.lower()
+        
+        # Rescheduling keywords
+        reschedule_keywords = [
+            'postponed', 'postpone', 'rescheduled', 'reschedule', 
+            'moved to', 'changed to', 'shifted to', 'new date'
+        ]
+        
+        # Visit/event keywords
+        event_keywords = ['visit', 'meeting', 'interview', 'session', 'appointment']
+        
+        # Check for rescheduling patterns
+        is_rescheduled = False
+        new_date = None
+        reason = None
+        
+        # Direct rescheduling detection
+        for reschedule_word in reschedule_keywords:
+            if reschedule_word in hr_lower:
+                is_rescheduled = True
+                break
+        
+        # Check if it's related to a visit/event
+        if is_rescheduled:
+            has_event_context = any(event_word in hr_lower for event_word in event_keywords)
+            if not has_event_context:
+                is_rescheduled = False
+        
+        # Extract new date if rescheduled
+        if is_rescheduled:
+            new_date = AIService._extract_date(hr_message)
+        
+        return {
+            'is_rescheduled': is_rescheduled,
+            'new_date': new_date,
+            'reason': reason
+        }
+        
     @staticmethod
     def analyze_sentiment(email_body: str) -> str:
         """

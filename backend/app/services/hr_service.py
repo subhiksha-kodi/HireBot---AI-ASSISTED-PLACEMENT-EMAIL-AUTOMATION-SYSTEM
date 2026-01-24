@@ -202,13 +202,9 @@ class HRService:
                 if direction == "received":
                     contact.email_status = "Replied"
                     contact.draft_status = "Completed"
-                    # Capture newest content for intent extraction after the loop
+                    # Process intent immediately for each received email
+                    HRService._process_intent_for_email(db, contact, content)
                     latest_received_content = content
-            
-            # 4. Auto-extract intent ONLY for the latest received email to avoid timeout
-            if latest_received_content:
-                print(f"[SYNC] Processing intent for latest received email...")
-                HRService._process_intent_for_email(db, contact, latest_received_content)
             
             db.commit()
             return {"message": f"Sync complete. New: {stored_count}, Merged: {merged_count}", "new": stored_count}
@@ -351,13 +347,11 @@ class HRService:
                     db.add(conversation)
                     if direction == "received":
                          latest_received_content = content
+                         # Process intent immediately for received emails
+                         HRService._process_intent_for_email(db, contact, content)
                     stored_count += 1
                     if message_id:
                         processed_ids.add(message_id)
-                
-                # Auto-extract intent ONLY for the latest received email to avoid per-contact bottlenecks
-                if latest_received_content:
-                    HRService._process_intent_for_email(db, contact, latest_received_content)
                 
                 total_stored += stored_count
                 if stored_count > 0:
@@ -374,9 +368,36 @@ class HRService:
             return {"error": str(e), "count": 0}
     @staticmethod
     def _process_intent_for_email(db: Session, contact: HRContact, content: str):
-        """Auto-extract intent and create reminder if visit detected"""
+        """Auto-extract intent and create reminder if visit detected, or cancel reminders if cancellation detected"""
         try:
             if not content or len(content) < 20: return
+            
+            # Check for cancellation first
+            cancellation_info = AIService.detect_cancellation(content)
+            if cancellation_info['is_cancelled']:
+                print(f"[CANCELLATION] Detected cancellation from {contact.company}: {cancellation_info['reason']}")
+                cancelled_count = ReminderService.handle_cancellation(db, contact.id, cancellation_info)
+                if cancelled_count > 0:
+                    print(f"[CANCELLATION] Cancelled {cancelled_count} reminders for {contact.company}")
+                return
+            
+            # Check for rescheduling
+            reschedule_info = AIService.detect_rescheduling(content)
+            if reschedule_info['is_rescheduled'] and reschedule_info['new_date']:
+                print(f"[RESCHEDULE] Detected rescheduling from {contact.company} to {reschedule_info['new_date']}")
+                
+                # Cancel old visit reminders
+                cancelled_count = ReminderService.handle_cancellation(db, contact.id, {'is_cancelled': True})
+                
+                # Create new reminder with new date
+                ReminderService.create_reminder(db, ReminderCreate(
+                    contact_id=contact.id,
+                    description=f"Campus Visit: Rescheduled",
+                    due_date=reschedule_info['new_date'],
+                    priority="high"
+                ))
+                print(f"[RESCHEDULE] Created new reminder for {contact.company} on {reschedule_info['new_date']}")
+                return
             
             # Using AIService to extract intent
             intent = AIService.extract_intent(content, contact.company)

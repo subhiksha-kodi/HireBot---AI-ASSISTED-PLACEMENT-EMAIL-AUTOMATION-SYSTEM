@@ -158,11 +158,15 @@ function LoginPage() {
               }
             }}
             onError={(error) => {
+              console.error("Google OAuth Error:", error);
               setError("Google login failed. Please try again.");
             }}
             theme="filled_blue"
             shape="pill"
             text="signin_with"
+            useOneTap={false}
+            auto_select={false}
+            cancel_on_tap_outside={true}
           />
         </div>
 

@@ -100,11 +100,12 @@ def create_app() -> FastAPI:
     # CORS configuration (optimized for development)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],  # Specific origins for better security
+        allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "https://accounts.google.com"],
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allow_headers=["*"],
-        max_age=3600,  # Cache preflight requests for 1 hour
+        max_age=3600,
+        expose_headers=["*"]
     )
 
     # Include versioned API router

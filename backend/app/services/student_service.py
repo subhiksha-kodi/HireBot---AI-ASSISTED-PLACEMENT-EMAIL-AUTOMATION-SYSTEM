@@ -14,7 +14,18 @@ class StudentService:
 
     @staticmethod
     def list_students(db: Session) -> List[StudentResponse]:
-        students = db.query(Student).order_by(Student.import_order.asc()).all()
+        # Get only the latest record for each roll_no based on date (or id if no date)
+        subquery = db.query(
+            Student.roll_no,
+            func.coalesce(func.max(Student.date), func.max(Student.id)).label('max_identifier')
+        ).group_by(Student.roll_no).subquery()
+        
+        students = db.query(Student).join(
+            subquery,
+            (Student.roll_no == subquery.c.roll_no) & 
+            (func.coalesce(Student.date, Student.id) == subquery.c.max_identifier)
+        ).order_by(Student.import_order.asc()).all()
+        
         return [StudentResponse.model_validate(s) for s in students]
 
     @staticmethod
@@ -35,10 +46,22 @@ class StudentService:
 
     @staticmethod
     def get_dashboard_metrics(db: Session) -> StudentDashboardMetrics:
-        total_students = db.query(func.count(Student.id)).scalar() or 0
+        # Get only the latest record for each roll_no for metrics calculation
+        subquery = db.query(
+            Student.roll_no,
+            func.coalesce(func.max(Student.date), func.max(Student.id)).label('max_identifier')
+        ).group_by(Student.roll_no).subquery()
         
-        # Get all students to normalize and count distinct departments/domains
-        all_students = db.query(Student).all()
+        latest_students_query = db.query(Student).join(
+            subquery,
+            (Student.roll_no == subquery.c.roll_no) & 
+            (func.coalesce(Student.date, Student.id) == subquery.c.max_identifier)
+        )
+        
+        total_students = latest_students_query.count()
+        
+        # Get all latest students for processing
+        all_students = latest_students_query.all()
         
         # Normalize and count distinct departments (case-insensitive, trimmed)
         # Convert to uppercase for consistent counting
@@ -60,19 +83,19 @@ class StudentService:
                     domains[domain] = domains.get(domain, 0) + 1
         domain_count = len(domains)
 
-        top_students_query = db.query(Student).order_by(Student.ps_level.desc()).limit(10).all()
+        top_students_query = latest_students_query.order_by(Student.ps_level.desc()).limit(10).all()
         top_students = [StudentResponse.model_validate(s) for s in top_students_query]
 
         # Top Software Students (CSE, IT, CSBS, AIDS, AIML)
         software_depts = ['CSE', 'IT', 'CSBS', 'AIDS', 'AIML']
         core_depts = ['ECE', 'EEE', 'MECH', 'MTRS', 'BT']
 
-        top_soft_query = db.query(Student).filter(
+        top_soft_query = latest_students_query.filter(
             func.upper(Student.department).in_(software_depts)
         ).order_by(Student.ps_level.desc()).limit(5).all()
         top_software_students = [StudentResponse.model_validate(s) for s in top_soft_query]
 
-        top_core_query = db.query(Student).filter(
+        top_core_query = latest_students_query.filter(
             func.upper(Student.department).in_(core_depts)
         ).order_by(Student.ps_level.desc()).limit(5).all()
         top_core_students = [StudentResponse.model_validate(s) for s in top_core_query]
